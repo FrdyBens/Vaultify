@@ -2,12 +2,11 @@ import React, { useState, useEffect, useCallback } from 'react';
 import PinInput from './components/PinInput';
 import Dashboard from './components/Dashboard';
 import Toast from './components/Toast';
-import { Bookmark, EncryptedData, BookmarkCategory, EncryptedFileFormat } from './types';
-import { LOCAL_STORAGE_KEY, THEME_STORAGE_KEY } from './constants';
+import { Bookmark, EncryptedData, BookmarkCategory, EncryptedFileFormat, UiTheme } from './types';
+import { LOCAL_STORAGE_KEY, THEME_STORAGE_KEY, UI_THEME_STORAGE_KEY, YOUTUBE_API_KEY_STORAGE_KEY } from './constants';
 import * as cryptoService from './services/cryptoService';
 import SpinnerIcon from './components/icons/SpinnerIcon';
 
-// Generate a UUID (simple version for client-side)
 function generateUUID(): string {
   return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
     const r = Math.random() * 16 | 0, v = c === 'x' ? r : (r & 0x3 | 0x8);
@@ -29,18 +28,20 @@ const App: React.FC = () => {
   const [derivedKey, setDerivedKey] = useState<CryptoKey | null>(null);
   const [storedSalt, setStoredSalt] = useState<Uint8Array | null>(null);
   
-  const [isLoading, setIsLoading] = useState(true); // For initial load check
-  const [actionLoading, setActionLoading] = useState(false); // For PIN submit, save operations
+  const [isLoading, setIsLoading] = useState(true);
+  const [actionLoading, setActionLoading] = useState(false);
   const [pinError, setPinError] = useState<string | null>(null);
   const [isInitialSetup, setIsInitialSetup] = useState(false);
 
-  const [currentTheme, setCurrentTheme] = useState<'light' | 'dark'>('dark');
+  const [currentTheme, setCurrentTheme] = useState<'light' | 'dark'>('dark'); // For light/dark mode
+  const [uiTheme, setUiTheme] = useState<UiTheme>('current'); // For overall UI style (current, visual)
+  const [youtubeApiKey, setYoutubeApiKey] = useState<string>('');
+
   const [toast, setToast] = useState<ToastMessage | null>(null);
   const [lastClipboardText, setLastClipboardText] = useState<string>('');
   const [quickAddUrl, setQuickAddUrl] = useState<string | null>(null);
 
-
-  // Theme management
+  // Light/Dark Theme management
   useEffect(() => {
     const storedTheme = localStorage.getItem(THEME_STORAGE_KEY) as 'light' | 'dark' | null;
     const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
@@ -55,7 +56,6 @@ const App: React.FC = () => {
       document.documentElement.classList.remove('dark');
     }
     localStorage.setItem(THEME_STORAGE_KEY, currentTheme);
-    // Update meta theme-color for PWA dynamic theming
     const themeColorMeta = document.querySelector('meta[name="theme-color"]');
     if (themeColorMeta) {
         themeColorMeta.setAttribute('content', currentTheme === 'dark' ? '#0f172a' : '#f8fafc');
@@ -64,6 +64,34 @@ const App: React.FC = () => {
 
   const handleToggleTheme = () => {
     setCurrentTheme(prev => prev === 'light' ? 'dark' : 'light');
+  };
+
+  // UI Theme (current, visual) management
+  useEffect(() => {
+    const storedUiTheme = localStorage.getItem(UI_THEME_STORAGE_KEY) as UiTheme | null;
+    if (storedUiTheme) {
+      setUiTheme(storedUiTheme);
+    }
+    const storedYoutubeKey = localStorage.getItem(YOUTUBE_API_KEY_STORAGE_KEY);
+    if (storedYoutubeKey) {
+      setYoutubeApiKey(storedYoutubeKey);
+    }
+  }, []);
+
+  const handleSetUiTheme = (theme: UiTheme) => {
+    setUiTheme(theme);
+    localStorage.setItem(UI_THEME_STORAGE_KEY, theme);
+    document.body.className = `bg-slate-100 dark:bg-slate-900 text-slate-900 dark:text-slate-100 transition-colors duration-300 ${theme === 'visual' ? 'theme-visual' : 'theme-current'}`;
+  };
+   useEffect(() => { // Apply initial body class based on UI theme
+    document.body.className = `bg-slate-100 dark:bg-slate-900 text-slate-900 dark:text-slate-100 transition-colors duration-300 ${uiTheme === 'visual' ? 'theme-visual' : 'theme-current'}`;
+  }, [uiTheme]);
+
+
+  const handleSetYoutubeApiKey = (key: string) => {
+    setYoutubeApiKey(key);
+    localStorage.setItem(YOUTUBE_API_KEY_STORAGE_KEY, key);
+     setToast({id: 'yt-key-save', message: "YouTube API Key saved.", type: 'success'});
   };
   
   // Clipboard detection
@@ -74,42 +102,27 @@ const App: React.FC = () => {
         const text = await navigator.clipboard.readText();
         if (text && text !== lastClipboardText) {
           setLastClipboardText(text);
-          // Basic URL detection (can be improved)
           if (text.startsWith('http://') || text.startsWith('https://')) {
             try {
-              new URL(text); // Validate if it's a proper URL
-              // Check if this URL already exists
+              new URL(text);
               const urlExists = bookmarks.some(bm => bm.url === text);
               if (!urlExists) {
                 setToast({
                   id: `clipboard-${Date.now()}`,
                   message: `Add "${text.substring(0, 50)}${text.length > 50 ? '...' : ''}"?`,
                   type: 'clipboard',
-                  actionButton: {
-                    text: "Add Link",
-                    onClick: () => {
-                        setQuickAddUrl(text); // This will trigger Dashboard to open modal
-                        setToast(null);
-                    }
-                  },
-                  duration: 10000 // 10 seconds or until action/dismiss
+                  actionButton: { text: "Add Link", onClick: () => { setQuickAddUrl(text); setToast(null); }},
+                  duration: 10000
                 });
               }
-            } catch (e) { /* Not a valid URL, ignore */ }
+            } catch (e) { /* Not a valid URL */ }
           }
         }
-      } catch (err) {
-        // console.warn('Failed to read clipboard contents: ', err);
-        // Can happen if permission is not granted or page is not focused.
-      }
+      } catch (err) { /* console.warn('Failed to read clipboard contents: ', err); */ }
     };
-
     window.addEventListener('focus', handleFocus);
-    return () => {
-      window.removeEventListener('focus', handleFocus);
-    };
+    return () => window.removeEventListener('focus', handleFocus);
   }, [isAuthenticated, lastClipboardText, bookmarks]);
-
 
   // Initial data load
   useEffect(() => {
@@ -157,7 +170,6 @@ const App: React.FC = () => {
   const handlePinSubmit = useCallback(async (pin: string) => {
     setActionLoading(true);
     setPinError(null);
-
     try {
       if (isInitialSetup) {
         const newSalt = cryptoService.generateSalt();
@@ -216,8 +228,9 @@ const App: React.FC = () => {
           ...bookmarkData,
           id: generateUUID(),
           createdAt: new Date().toISOString(),
-          category: bookmarkData.category || BookmarkCategory.OTHER,
+          category: bookmarkData.category || BookmarkCategory.OTHER, // Default user category
           tags: bookmarkData.tags || [],
+          // AI categories are part of bookmarkData
         };
         updatedBookmarks = [...bookmarks, newBookmark];
       }
@@ -226,7 +239,6 @@ const App: React.FC = () => {
       setToast({id: 'save-bm-success', message: `Bookmark "${bookmarkData.name.substring(0,20)}..." saved.`, type: 'success'});
     } catch (error) {
        console.error("Failed to save bookmark:", error);
-       // Error displayed by saveDataToLocalStorage
     } finally {
       setActionLoading(false);
     }
@@ -255,17 +267,16 @@ const App: React.FC = () => {
   }, [bookmarks, derivedKey, storedSalt, saveDataToLocalStorage]);
   
   const handleBookmarkVisited = useCallback(async (bookmarkId: string) => {
-    if (!derivedKey || !storedSalt) return; // Silently fail if not authenticated
+    if (!derivedKey || !storedSalt) return;
     
     const updatedBookmarks = bookmarks.map(bm => 
         bm.id === bookmarkId ? { ...bm, lastVisited: new Date().toISOString() } : bm
     );
-    setBookmarks(updatedBookmarks); // Optimistic update
+    setBookmarks(updatedBookmarks);
     try {
         await saveDataToLocalStorage(derivedKey, storedSalt, updatedBookmarks);
     } catch (error) {
         console.error("Failed to update lastVisited status:", error);
-        // Optionally revert or show error
     }
   }, [bookmarks, derivedKey, storedSalt, saveDataToLocalStorage]);
 
@@ -274,8 +285,7 @@ const App: React.FC = () => {
     setDerivedKey(null);
     setBookmarks([]);
     setPinError(null);
-    setToast(null); // Clear any active toasts
-    // StoredSalt remains for next login.
+    setToast(null);
   };
 
   const handleExportBookmarks = useCallback(async () => {
@@ -285,12 +295,11 @@ const App: React.FC = () => {
     }
     setActionLoading(true);
     try {
-      // Data to export is the current bookmarks array, salt, and a new IV for this specific export
       const jsonData = JSON.stringify(bookmarks);
       const { iv, ciphertext } = await cryptoService.encryptData(derivedKey, jsonData);
       
       const exportData: EncryptedFileFormat = {
-        salt: cryptoService.arrayBufferToBase64(storedSalt), // Use the app's current salt
+        salt: cryptoService.arrayBufferToBase64(storedSalt),
         iv: cryptoService.arrayBufferToBase64(iv),
         ciphertext: cryptoService.arrayBufferToBase64(ciphertext),
       };
@@ -300,7 +309,7 @@ const App: React.FC = () => {
       const a = document.createElement('a');
       a.href = url;
       const date = new Date().toISOString().slice(0,10);
-      a.download = `securemark_bookmarks_${date}.json`;
+      a.download = `vaultify_bookmarks_${date}.json`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
@@ -325,8 +334,6 @@ const App: React.FC = () => {
         throw new Error("Invalid import file format.");
       }
       
-      // Prompt for PIN. For simplicity, re-using the main PIN input mechanism logic.
-      // A dedicated modal for import PIN might be better UX.
       const pin = window.prompt("Enter the PIN used to encrypt this backup file:");
       if (!pin) {
         setToast({id: 'import-cancel', message: "Import cancelled.", type: 'info'});
@@ -343,21 +350,19 @@ const App: React.FC = () => {
       const decryptedJson = await cryptoService.decryptData(importKey, new Uint8Array(iv), new Uint8Array(ciphertext));
       const loadedBookmarks: Bookmark[] = JSON.parse(decryptedJson);
 
-      // Successfully decrypted. Now replace current data.
       setDerivedKey(importKey);
       setStoredSalt(new Uint8Array(importSalt));
       setBookmarks(loadedBookmarks);
-      await saveDataToLocalStorage(importKey, new Uint8Array(importSalt), loadedBookmarks); // Save imported data as current
+      await saveDataToLocalStorage(importKey, new Uint8Array(importSalt), loadedBookmarks);
       
-      setIsAuthenticated(true); // Ensure authenticated state
-      setIsInitialSetup(false); // No longer initial setup
+      setIsAuthenticated(true);
+      setIsInitialSetup(false);
       setToast({id: 'import-success', message: `Successfully imported ${loadedBookmarks.length} bookmarks.`, type: 'success'});
 
     } catch (error) {
       console.error("Import failed:", error);
       setPinError(`Import failed: ${error instanceof Error ? error.message : 'Corrupted file or incorrect PIN.'}`);
       setToast({id: 'import-error', message: `Import failed: ${error instanceof Error ? error.message : 'Corrupted file or incorrect PIN.'}`, type: 'error'});
-      // Don't change current auth state or data if import fails
     } finally {
       setActionLoading(false);
     }
@@ -384,12 +389,17 @@ const App: React.FC = () => {
           onVisitBookmark={handleBookmarkVisited}
           onLock={handleLock}
           isSaving={actionLoading}
-          currentTheme={currentTheme}
+          currentTheme={currentTheme} // light/dark
           onToggleTheme={handleToggleTheme}
           onExportBookmarks={handleExportBookmarks}
           onImportBookmarks={handleImportBookmarks}
           quickAddUrl={quickAddUrl}
           onClearQuickAddUrl={() => setQuickAddUrl(null)}
+          // UI Theme and API Key props
+          uiTheme={uiTheme}
+          onSetUiTheme={handleSetUiTheme}
+          youtubeApiKey={youtubeApiKey}
+          onSetYoutubeApiKey={handleSetYoutubeApiKey}
         />
       )}
       {toast && (

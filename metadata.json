@@ -1,5 +1,5 @@
 {
-  "name": "Copy of Encrypted Bookmarks",
-  "description": "A local-only application to securely store and manage your bookmarks using PIN-based encryption. All data is stored in your browser's localStorage and encrypted/decrypted client-side.",
+  "name": "Vaultify",
+  "description": "Vaultify is a secure, AI-powered, offline bookmark vault that encrypts your favorite sites behind a PIN. Auto-generate titles and descriptions, organize with tags and AI categories, fetch icons, and stay clutter-free — all in your own private space. Supports direct YouTube metadata fetching.",
   "requestFramePermissions": []
 }
