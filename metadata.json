@@ -1,0 +1,5 @@
+{
+  "name": "Copy of Encrypted Bookmarks",
+  "description": "A local-only application to securely store and manage your bookmarks using PIN-based encryption. All data is stored in your browser's localStorage and encrypted/decrypted client-side.",
+  "requestFramePermissions": []
+}
