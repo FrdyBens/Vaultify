@@ -19,6 +19,7 @@ interface DashboardProps {
   onSaveBookmark: (bookmark: Omit<Bookmark, 'id' | 'createdAt' | 'obfuscatedId' | 'lastVisited'> & { id?: string }, isQuickAdd?: boolean) => Promise<void>;
   onDeleteBookmark: (bookmarkId: string) => Promise<void>;
   onVisitBookmark: (bookmarkId: string) => void;
+  onToggleReadStatus: (bookmarkId: string) => void; // New prop
   onLock: () => void;
   isSaving: boolean;
   currentTheme: 'light' | 'dark'; // For dark/light mode
@@ -36,7 +37,7 @@ interface DashboardProps {
 }
 
 const Dashboard: React.FC<DashboardProps> = ({
-  bookmarks, onSaveBookmark, onDeleteBookmark, onVisitBookmark, onLock, isSaving,
+  bookmarks, onSaveBookmark, onDeleteBookmark, onVisitBookmark, onToggleReadStatus, onLock, isSaving,
   currentTheme, onToggleTheme, onExportBookmarks, onImportBookmarks,
   quickAddUrl, onClearQuickAddUrl,
   uiTheme, onSetUiTheme, youtubeApiKey, onSetYoutubeApiKey
@@ -47,6 +48,7 @@ const Dashboard: React.FC<DashboardProps> = ({
   const [searchTerm, setSearchTerm] = useState('');
   const [filterCategory, setFilterCategory] = useState<BookmarkCategory | 'ALL'>('ALL');
   const [filterTag, setFilterTag] = useState<string | 'ALL'>('ALL');
+  const [filterReadStatus, setFilterReadStatus] = useState<'ALL' | 'READ' | 'UNREAD'>('ALL'); // New filter state
   const [sortOption, setSortOption] = useState<SortOption>('createdAt_desc');
   const [initialUrlForForm, setInitialUrlForForm] = useState<string | undefined>(undefined);
 
@@ -111,6 +113,9 @@ const Dashboard: React.FC<DashboardProps> = ({
     processedBookmarks = processedBookmarks.filter(bm => {
       const categoryMatch = filterCategory === 'ALL' || bm.category === filterCategory;
       const tagMatch = filterTag === 'ALL' || (bm.tags && bm.tags.includes(filterTag));
+      const readMatch = filterReadStatus === 'ALL' ||
+                        (filterReadStatus === 'READ' && bm.isRead === true) ||
+                        (filterReadStatus === 'UNREAD' && (bm.isRead === false || bm.isRead === undefined));
       const searchParts = searchTerm.toLowerCase().split(" ").filter(p => p.length > 0);
       const searchMatch = searchParts.every(part => 
         bm.name.toLowerCase().includes(part) ||
@@ -121,7 +126,7 @@ const Dashboard: React.FC<DashboardProps> = ({
         (bm.secondaryCategoryAI && bm.secondaryCategoryAI.toLowerCase().includes(part)) ||
         (bm.subcategoriesAI && bm.subcategoriesAI.some(sc => sc.toLowerCase().includes(part)))
       );
-      return categoryMatch && tagMatch && searchMatch;
+      return categoryMatch && tagMatch && readMatch && searchMatch;
     });
 
     processedBookmarks.sort((a, b) => {
@@ -134,12 +139,16 @@ const Dashboard: React.FC<DashboardProps> = ({
         case 'lastVisited_desc':
           if (!a.lastVisited) return 1; if (!b.lastVisited) return -1;
           return new Date(b.lastVisited).getTime() - new Date(a.lastVisited).getTime();
+        case 'isRead_asc': // Unread (false or undefined) first
+          return (a.isRead === true ? 1 : 0) - (b.isRead === true ? 1 : 0);
+        case 'isRead_desc': // Read (true) first
+          return (b.isRead === true ? 1 : 0) - (a.isRead === true ? 1 : 0);
         case 'createdAt_asc': return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
         case 'createdAt_desc': default: return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
       }
     });
     return processedBookmarks;
-  }, [bookmarks, searchTerm, filterCategory, filterTag, sortOption]);
+  }, [bookmarks, searchTerm, filterCategory, filterTag, filterReadStatus, sortOption]);
 
   const inputClass = "w-full md:w-auto px-4 py-2.5 rounded-lg bg-slate-50 dark:bg-slate-700 text-slate-900 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-400 focus:ring-2 focus:ring-sky-500 dark:focus:ring-sky-400 focus:outline-none transition-shadow appearance-none";
   const iconButtonClass = "p-2 rounded-full text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-sky-500 dark:focus:ring-sky-400 focus:ring-offset-1 focus:ring-offset-white dark:focus:ring-offset-slate-800 transition-colors";
@@ -192,6 +201,16 @@ const Dashboard: React.FC<DashboardProps> = ({
             />
             <MagnifyingGlassIcon className="w-5 h-5 text-slate-400 dark:text-slate-500 absolute left-3 top-1/2 transform -translate-y-1/2" />
             </div>
+            <select
+              value={filterReadStatus}
+              onChange={(e) => setFilterReadStatus(e.target.value as 'ALL' | 'READ' | 'UNREAD')}
+              className={inputClass}
+              style={{ backgroundImage: currentTheme === 'dark' ? darkSelectArrowSvg : selectArrowSvg, backgroundRepeat: 'no-repeat', backgroundPosition: 'right 0.7rem center', backgroundSize: '1.25em 1.25em' }}
+            >
+              <option value="ALL">All Read Status</option>
+              <option value="UNREAD">Unread</option>
+              <option value="READ">Read</option>
+            </select>
             <select 
             value={filterCategory}
             onChange={(e) => setFilterCategory(e.target.value as BookmarkCategory | 'ALL')}
@@ -231,6 +250,8 @@ const Dashboard: React.FC<DashboardProps> = ({
                 <option value="name_desc">Name (Z-A)</option>
                 <option value="lastVisited_desc">Last Visited (Newest First)</option>
                 <option value="lastVisited_asc">Last Visited (Oldest First)</option>
+                <option value="isRead_desc">Read Status (Read First)</option>
+                <option value="isRead_asc">Read Status (Unread First)</option>
             </select>
         </div>
       </div>
@@ -244,6 +265,7 @@ const Dashboard: React.FC<DashboardProps> = ({
               onEdit={handleEditBookmark} 
               onDelete={handleDeleteBookmark}
               onVisit={onVisitBookmark}
+              onToggleReadStatus={onToggleReadStatus} // Pass down
               numericId={bookmarks.findIndex(b => b.id === bm.id) + 1}
               uiTheme={uiTheme} // Pass current UI theme
             />
@@ -257,7 +279,7 @@ const Dashboard: React.FC<DashboardProps> = ({
           </p>
           {bookmarks.length > 0 && (
             <button 
-                onClick={() => { setSearchTerm(''); setFilterCategory('ALL'); setFilterTag('ALL');}}
+                onClick={() => { setSearchTerm(''); setFilterCategory('ALL'); setFilterTag('ALL'); setFilterReadStatus('ALL');}}
                 className="mt-4 px-4 py-2 text-sm font-medium text-white bg-sky-600 hover:bg-sky-700 dark:bg-sky-500 dark:hover:bg-sky-600 rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-white dark:focus:ring-offset-slate-800 focus:ring-sky-500"
             >
                 Clear Search & Filters

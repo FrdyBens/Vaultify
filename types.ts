@@ -24,6 +24,8 @@ export interface Bookmark {
   primaryCategoryAI?: string;
   secondaryCategoryAI?: string;
   subcategoriesAI?: string[];
+  notes?: string;
+  isRead?: boolean;
 }
 
 export interface EncryptedData {
@@ -42,7 +44,9 @@ export type SortOption =
   | "name_asc"
   | "name_desc"
   | "lastVisited_desc"
-  | "lastVisited_asc";
+  | "lastVisited_asc"
+  | "isRead_asc"
+  | "isRead_desc";
 
 export interface AiGeneratedInfo { // For general title, desc, tags from AI
   title: string;

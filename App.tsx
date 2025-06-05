@@ -280,6 +280,30 @@ const App: React.FC = () => {
     }
   }, [bookmarks, derivedKey, storedSalt, saveDataToLocalStorage]);
 
+  const handleToggleReadStatus = useCallback(async (bookmarkId: string) => {
+    if (!derivedKey || !storedSalt) {
+      setPinError("Encryption key not available. Please re-authenticate.");
+      setIsAuthenticated(false);
+      return;
+    }
+    // No setActionLoading(true) here to keep it quick, saving is in background
+    try {
+      const updatedBookmarks = bookmarks.map(bm =>
+        bm.id === bookmarkId ? { ...bm, isRead: !(bm.isRead === true) } : bm // Toggle, default to false if undefined
+      );
+      setBookmarks(updatedBookmarks);
+      await saveDataToLocalStorage(derivedKey, storedSalt, updatedBookmarks);
+      const ToggledBookmark = updatedBookmarks.find(bm => bm.id === bookmarkId);
+      if (ToggledBookmark) {
+        setToast({id: `read-status-${bookmarkId}`, message: `Marked "${ToggledBookmark.name.substring(0,20)}..." as ${ToggledBookmark.isRead ? 'Read' : 'Unread'}.`, type: 'info', duration: 2000});
+      }
+    } catch (error) {
+      console.error("Failed to toggle read status:", error);
+      setToast({id: `read-status-err-${bookmarkId}`, message: 'Failed to update read status.', type: 'error'});
+    }
+    // No setActionLoading(false)
+  }, [bookmarks, derivedKey, storedSalt, saveDataToLocalStorage]);
+
   const handleLock = () => {
     setIsAuthenticated(false);
     setDerivedKey(null);
@@ -387,6 +411,7 @@ const App: React.FC = () => {
           onSaveBookmark={handleSaveBookmark} 
           onDeleteBookmark={handleDeleteBookmark}
           onVisitBookmark={handleBookmarkVisited}
+          onToggleReadStatus={handleToggleReadStatus} // Pass down the new handler
           onLock={handleLock}
           isSaving={actionLoading}
           currentTheme={currentTheme} // light/dark

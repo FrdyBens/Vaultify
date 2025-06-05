@@ -5,19 +5,24 @@ import PencilIcon from './icons/PencilIcon';
 import TrashIcon from './icons/TrashIcon';
 import { encodeNumber } from '../services/obfuscationService';
 import LockIcon from './icons/LockIcon'; // Placeholder
+import ClipboardCheckIcon from './icons/ClipboardCheckIcon'; // For Mark as Read
+import XCircleIcon from './icons/XCircleIcon'; // For Mark as Unread
 
 interface BookmarkCardProps {
   bookmark: Bookmark;
   onEdit: (bookmark: Bookmark) => void;
   onDelete: (bookmarkId: string) => void;
   onVisit: (bookmarkId: string) => void;
+  onToggleReadStatus: (bookmarkId: string) => void; // New prop
   numericId?: number;
   uiTheme: UiTheme;
 }
 
-const BookmarkCard: React.FC<BookmarkCardProps> = ({ bookmark, onEdit, onDelete, onVisit, numericId, uiTheme }) => {
+const BookmarkCard: React.FC<BookmarkCardProps> = ({ bookmark, onEdit, onDelete, onVisit, onToggleReadStatus, numericId, uiTheme }) => {
   const categoryColor = CATEGORY_COLORS[bookmark.category] || 'bg-slate-500 dark:bg-slate-600';
   const obfuscatedDisplayId = typeof numericId === 'number' ? encodeNumber(numericId) : bookmark.id.substring(0, 6);
+  const isRead = bookmark.isRead === true;
+  const cardReadStyle = isRead ? 'opacity-70 hover:opacity-100 dark:opacity-60 dark:hover:opacity-90' : '';
 
   const handleLinkClick = (e: React.MouseEvent<HTMLAnchorElement>) => {
     e.preventDefault();
@@ -30,7 +35,7 @@ const BookmarkCard: React.FC<BookmarkCardProps> = ({ bookmark, onEdit, onDelete,
   // Visual Theme Card
   if (uiTheme === 'visual') {
     return (
-      <div className="bookmark-card-visual group"> {/* Added group for hover effects on children */}
+      <div className={`bookmark-card-visual group ${cardReadStyle}`}> {/* Apply read style */}
         {/* Thumbnail Area */}
         {(bookmark.thumbnailUrl || bookmark.iconUrl) && (
           <a href={bookmark.url} onClick={handleLinkClick} target="_blank" rel="noopener noreferrer" className="visual-thumbnail-area block">
@@ -68,6 +73,13 @@ const BookmarkCard: React.FC<BookmarkCardProps> = ({ bookmark, onEdit, onDelete,
           )}
           {!bookmark.description && <div className="flex-grow"></div>}
 
+          {/* Notes Display for Visual Theme */}
+          {bookmark.notes && (
+            <p className="visual-notes text-xs text-slate-600 dark:text-slate-300 mt-1 mb-2 p-2 bg-slate-100 dark:bg-slate-700 rounded max-h-20 overflow-y-auto custom-scrollbar">
+              <strong>Notes:</strong> {bookmark.notes}
+            </p>
+          )}
+
           {/* AI Categories */}
           {(bookmark.primaryCategoryAI || bookmark.secondaryCategoryAI || (bookmark.subcategoriesAI && bookmark.subcategoriesAI.length > 0)) && (
             <div className="visual-ai-categories">
@@ -96,6 +108,9 @@ const BookmarkCard: React.FC<BookmarkCardProps> = ({ bookmark, onEdit, onDelete,
                 {bookmark.lastVisited && <span className="ml-2">Visited: {new Date(bookmark.lastVisited).toLocaleDateString()}</span>}
             </div>
             <div className="visual-actions">
+              <button onClick={() => onToggleReadStatus(bookmark.id)} title={isRead ? "Mark as Unread" : "Mark as Read"}>
+                {isRead ? <XCircleIcon className="w-5 h-5 text-orange-500" /> : <ClipboardCheckIcon className="w-5 h-5 text-green-500" />}
+              </button>
               <button onClick={() => onEdit(bookmark)} title="Edit"><PencilIcon className="w-5 h-5" /></button>
               <button onClick={() => onDelete(bookmark.id)} title="Delete"><TrashIcon className="w-5 h-5" /></button>
             </div>
@@ -107,7 +122,7 @@ const BookmarkCard: React.FC<BookmarkCardProps> = ({ bookmark, onEdit, onDelete,
 
   // Current (Original) Theme Card
   return (
-    <div className="bg-white dark:bg-slate-800 rounded-lg shadow-lg overflow-hidden transition-all hover:shadow-sky-500/20 dark:hover:shadow-sky-400/20 hover:ring-1 hover:ring-sky-500 dark:hover:ring-sky-600 flex flex-col bookmark-card-current">
+    <div className={`bg-white dark:bg-slate-800 rounded-lg shadow-lg overflow-hidden transition-all hover:shadow-sky-500/20 dark:hover:shadow-sky-400/20 hover:ring-1 hover:ring-sky-500 dark:hover:ring-sky-600 flex flex-col bookmark-card-current ${cardReadStyle}`}>
       <div className={`h-1.5 ${categoryColor}`}></div>
       
       {bookmark.thumbnailUrl && (
@@ -145,7 +160,16 @@ const BookmarkCard: React.FC<BookmarkCardProps> = ({ bookmark, onEdit, onDelete,
             {bookmark.description}
           </p>
         )}
-        {!bookmark.description && <div className="flex-grow"></div>}
+
+        {/* Notes Display for Current Theme */}
+        {bookmark.notes && (
+          <div className="mt-2 text-sm text-slate-600 dark:text-slate-300 max-h-24 overflow-y-auto pr-1 custom-scrollbar border-t border-slate-200 dark:border-slate-700 pt-2">
+             <p className="font-semibold text-xs text-slate-500 dark:text-slate-400 mb-1">Notes:</p>
+             <p className="whitespace-pre-wrap">{bookmark.notes}</p>
+          </div>
+        )}
+        {!bookmark.description && !bookmark.notes && <div className="flex-grow"></div>} {/* Adjust flex-grow if neither desc nor notes */}
+
 
         {/* AI Categories Display */}
         {(bookmark.primaryCategoryAI || bookmark.secondaryCategoryAI || (bookmark.subcategoriesAI && bookmark.subcategoriesAI.length > 0)) && (
@@ -175,6 +199,13 @@ const BookmarkCard: React.FC<BookmarkCardProps> = ({ bookmark, onEdit, onDelete,
              <p className="text-xs text-slate-400 dark:text-slate-500 mt-0.5">Visited: {new Date(bookmark.lastVisited).toLocaleDateString()}</p>
           )}
           <div className="flex space-x-1 justify-end mt-2">
+            <button
+              onClick={() => onToggleReadStatus(bookmark.id)}
+              className={`p-1.5 text-slate-500 dark:text-slate-400 transition-colors rounded-full hover:bg-slate-100 dark:hover:bg-slate-700 ${isRead ? 'hover:text-orange-500 dark:hover:text-orange-400' : 'hover:text-green-600 dark:hover:text-green-400'}`}
+              title={isRead ? "Mark as Unread" : "Mark as Read"}
+            >
+              {isRead ? <XCircleIcon className="w-4 h-4 sm:w-5 sm:h-5" /> : <ClipboardCheckIcon className="w-4 h-4 sm:w-5 sm:h-5" />}
+            </button>
             <button
               onClick={() => onEdit(bookmark)}
               className="p-1.5 text-slate-500 dark:text-slate-400 hover:text-sky-600 dark:hover:text-sky-400 transition-colors rounded-full hover:bg-slate-100 dark:hover:bg-slate-700"
@@ -212,6 +243,10 @@ const BookmarkCard: React.FC<BookmarkCardProps> = ({ bookmark, onEdit, onDelete,
         }
         .dark .custom-scrollbar::-webkit-scrollbar-thumb:hover {
           background: #64748b; /* slate-500 */
+        }
+        .visual-notes { /* Style for notes in visual theme */
+          font-size: 0.8rem;
+          line-height: 1.3;
         }
       `}
       </style>
